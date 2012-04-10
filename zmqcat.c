@@ -1,5 +1,5 @@
 /*
- * (C) Emiel Mols, 2010. Released under the Simplified BSD License.
+ * (C) Emiel Mols, 2012. Released under the Simplified BSD License.
  * Attribution is very much appreciated.
  */
 
@@ -30,6 +30,7 @@ void recv(void* socket, int type, int verbose) {
 		return;
 	}
 
+	// Read single message (all frames) and dump to stdout.
 	do {
 		ok = zmq_recv(socket, &msg, 0);
 		if (ok < 0) {
@@ -51,6 +52,10 @@ void send(void* socket, int type, int verbose) {
 
 	if (type == ZMQ_PULL || type == ZMQ_SUB)
 		return;
+
+	// Read stdin into a forward linked buffer. First
+	// chunk is on the stack, subsequent chunks are
+	// allocated on the heap when necessary.
 
 	char stack_buffer[SEND_BUFFER_SIZE + sizeof(char *)];
 	*(char **)(stack_buffer+SEND_BUFFER_SIZE) = NULL;
@@ -77,34 +82,39 @@ void send(void* socket, int type, int verbose) {
 	ok = zmq_msg_init_size(&msg, total);
 	if (ok < 0) {
 		fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
+		goto dealloc;
 	}
-	else {
-		char *dest = (char *)zmq_msg_data(&msg);
 
-		buffer = stack_buffer;
-		while (buffer != NULL) {
-			memcpy(dest, buffer, SEND_BUFFER_SIZE);
-
-			buffer = *(char **)&buffer[SEND_BUFFER_SIZE];
-			dest += SEND_BUFFER_SIZE;
-		}
-
-		if (verbose)
-			fprintf(stderr, "sending %ld bytes\n", total);
-
-		ok = zmq_send(socket, &msg, 0);
-		if (ok < 0)
-			fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
-	}
+	char *msg_at = (char *)zmq_msg_data(&msg);
+	char *msg_end = msg_at + total;
 
 	buffer = stack_buffer;
 	while (buffer != NULL) {
-		if (buffer != stack_buffer)
-			free(buffer);
+		size_t chunk_size = SEND_BUFFER_SIZE;
+		if (msg_at + chunk_size >= msg_end)
+			chunk_size = msg_end - msg_at;
+
+		memcpy(msg_at, buffer, chunk_size);
 
 		buffer = *(char **)&buffer[SEND_BUFFER_SIZE];
+		msg_at += chunk_size;
 	}
 
+	if (verbose)
+		fprintf(stderr, "sending %ld bytes\n", total);
+
+	ok = zmq_send(socket, &msg, 0);
+	if (ok < 0)
+		fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
+
+dealloc:
+	buffer = stack_buffer;
+	while (1) {
+		buffer = *(char **)&stack_buffer[SEND_BUFFER_SIZE];
+		if (buffer == NULL)
+			break;
+		free(buffer);
+	}
 }
 
 int main(int argc, char *argv[]) {
@@ -171,12 +181,9 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
 		return 1;
 	}
-	else if (verbose && bind) {
-		fprintf(stderr, "bound to %s\n", endpoint);
-	}
-	else if (verbose) {
-		fprintf(stderr, "connecting to %s\n", endpoint);
-	}
+	
+	if (verbose)
+		fprintf(stderr, "%s to %s\n", (bind ? "bound" : "connecting"), endpoint);
 
 	if (type == ZMQ_REP) {
 		recv(socket, type, verbose);
