@@ -13,7 +13,7 @@
 
 #define SEND_BUFFER_SIZE 8192
 
-void recv(void* socket, int type, int verbose) {
+void zmqcat_recv(void* socket, int type, int verbose) {
 
 	if (type == ZMQ_PUSH || type == ZMQ_PUB)
 		return;
@@ -48,7 +48,7 @@ void recv(void* socket, int type, int verbose) {
 	} while (rcvmore);
 }
 
-void send(void* socket, int type, int verbose) {
+void zmqcat_send(void* socket, int type, int verbose) {
 
 	if (type == ZMQ_PULL || type == ZMQ_SUB)
 		return;
@@ -186,12 +186,12 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "%s to %s\n", (bind ? "bound" : "connecting"), endpoint);
 
 	if (type == ZMQ_REP) {
-		recv(socket, type, verbose);
-		send(socket, type, verbose);
+		zmqcat_recv(socket, type, verbose);
+		zmqcat_send(socket, type, verbose);
 	}
 	else {
-		send(socket, type, verbose);
-		recv(socket, type, verbose);
+		zmqcat_send(socket, type, verbose);
+		zmqcat_recv(socket, type, verbose);
 	}
 
 	ok = zmq_close(socket);
