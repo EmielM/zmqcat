@@ -32,7 +32,7 @@ void zmqcat_recv(void* socket, int type, int verbose) {
 
 	// Read single message (all frames) and dump to stdout.
 	do {
-		ok = zmq_recv(socket, &msg, 0);
+		ok = zmq_msg_recv(&msg, socket, 0);
 		if (ok < 0) {
 			fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
 			return;
@@ -103,7 +103,7 @@ void zmqcat_send(void* socket, int type, int verbose) {
 	if (verbose)
 		fprintf(stderr, "sending %ld bytes\n", total);
 
-	ok = zmq_send(socket, &msg, 0);
+	ok = zmq_msg_send(&msg, socket, 0);
 	if (ok < 0)
 		fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
 
