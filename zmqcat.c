@@ -20,11 +20,11 @@ void zmqcat_recv(void* socket, int type, int verbose) {
 
 	int ok;
 
-	int64_t rcvmore;
+	int64_t rcvmore = 0;
 	size_t rcvmore_size = sizeof(rcvmore);
 
 	zmq_msg_t msg;
-	zmq_msg_init(&msg);
+	ok = zmq_msg_init(&msg);
 	if (ok < 0) {
 		fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
 		return;
@@ -32,7 +32,7 @@ void zmqcat_recv(void* socket, int type, int verbose) {
 
 	// Read single message (all frames) and dump to stdout.
 	do {
-		ok = zmq_recv(socket, &msg, 0);
+		ok = zmq_msg_recv(&msg, socket, 0);
 		if (ok < 0) {
 			fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
 			return;
@@ -49,6 +49,7 @@ void zmqcat_recv(void* socket, int type, int verbose) {
 }
 
 void zmqcat_send(void* socket, int type, int verbose) {
+	char *sbuf, *tbuf;
 
 	if (type == ZMQ_PULL || type == ZMQ_SUB)
 		return;
@@ -103,17 +104,16 @@ void zmqcat_send(void* socket, int type, int verbose) {
 	if (verbose)
 		fprintf(stderr, "sending %ld bytes\n", total);
 
-	ok = zmq_send(socket, &msg, 0);
+	ok = zmq_msg_send(&msg, socket, 0);
 	if (ok < 0)
 		fprintf(stderr, "error %d: %s\n", errno, zmq_strerror(errno));
 
 dealloc:
-	buffer = stack_buffer;
-	while (1) {
-		buffer = *(char **)&stack_buffer[SEND_BUFFER_SIZE];
-		if (buffer == NULL)
-			break;
-		free(buffer);
+	sbuf = *(char **)&stack_buffer[SEND_BUFFER_SIZE];
+	while (sbuf) {
+		tbuf = sbuf;
+		sbuf = *(char **)&sbuf[SEND_BUFFER_SIZE];
+		free(tbuf);
 	}
 }
 
